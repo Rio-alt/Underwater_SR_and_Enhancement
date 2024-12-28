@@ -12,42 +12,31 @@ from itertools import cycle
 from PFIN import PFIN
 
 
-def extract_patches(image, patch_size, stride):
-    _, h, w = image.shape
-    patches = image.unfold(1, patch_size, stride).unfold(2, patch_size, stride)
-    patches = patches.contiguous().view(-1, 3, patch_size, patch_size)
-    return patches
-
+# Custom Datasets
 class USR2048Dataset(Dataset):
-    def __init__(self, root_dir, scale_factor, patch_size=50, stride=50):
+    def __init__(self, root_dir, scale_factor):
         self.root_dir = root_dir
         self.scale_factor = scale_factor
-        self.patch_size = patch_size
-        self.stride = stride
         self.hr_dir = os.path.join(root_dir, 'hr')
-        self.lr_dir = os.path.join(root_dir, f'lr_{scale_factor}x')
         self.image_names = sorted(os.listdir(self.hr_dir))
 
     def __len__(self):
         return len(self.image_names)
 
     def __getitem__(self, idx):
-        hr_image_path = os.path.join(self.hr_dir, self.image_names[idx])
-        lr_image_path = os.path.join(self.lr_dir, self.image_names[idx])
+        image_idx = idx
+        scale_factor = self.scale_factor
+        hr_image_path = os.path.join(self.hr_dir, self.image_names[image_idx])
+        lr_image_path = os.path.join(self.root_dir, f'lr_{scale_factor}x', self.image_names[image_idx])
         hr_image = Image.open(hr_image_path).convert('RGB')
         lr_image = Image.open(lr_image_path).convert('RGB')
         hr_image = TF.to_tensor(hr_image)
         lr_image = TF.to_tensor(lr_image)
-        
-        hr_patches = extract_patches(hr_image, self.patch_size, self.stride)
-        lr_patches = extract_patches(lr_image, self.patch_size, self.stride)
-        return lr_patches, hr_patches, self.scale_factor
+        return lr_image, hr_image, scale_factor
 
 class UFO120Dataset(Dataset):
-    def __init__(self, root_dir, patch_size=50, stride=50):
+    def __init__(self, root_dir):
         self.root_dir = root_dir
-        self.patch_size = patch_size
-        self.stride = stride
         self.hr_dir = os.path.join(root_dir, 'hr')
         self.lrd_dir = os.path.join(root_dir, 'lrd')
         self.image_names = sorted(os.listdir(self.hr_dir))
@@ -62,19 +51,13 @@ class UFO120Dataset(Dataset):
         lrd_image = Image.open(lrd_image_path).convert('RGB')
         hr_image = TF.to_tensor(hr_image)
         lrd_image = TF.to_tensor(lrd_image)
-        
-        hr_patches = extract_patches(hr_image, self.patch_size, self.stride)
-        lrd_patches = extract_patches(lrd_image, self.patch_size, self.stride)
         scale_factor = 2  # Fixed scale factor for UFO-120
-        return lrd_patches, hr_patches, scale_factor
-
+        return lrd_image, hr_image, scale_factor
 
 class EUVPDataset(Dataset):
-    def __init__(self, root_dir, sub_dir, patch_size=100, stride=100):
+    def __init__(self, root_dir, sub_dir):
         self.root_dir = root_dir
         self.sub_dir = sub_dir
-        self.patch_size = patch_size
-        self.stride = stride
         self.trainA_dir = os.path.join(root_dir, sub_dir, 'trainA')
         self.trainB_dir = os.path.join(root_dir, sub_dir, 'trainB')
         self.trainA_files = sorted(os.listdir(self.trainA_dir))
@@ -90,11 +73,8 @@ class EUVPDataset(Dataset):
         trainB_image = Image.open(trainB_image_path).convert('RGB')
         trainA_image = TF.to_tensor(trainA_image)
         trainB_image = TF.to_tensor(trainB_image)
-        
-        trainA_patches = extract_patches(trainA_image, self.patch_size, self.stride)
-        trainB_patches = extract_patches(trainB_image, self.patch_size, self.stride)
         scale_factor = 2  # Assuming a fixed scale factor for EUVP for simplicity
-        return trainA_patches, trainB_patches, scale_factor
+        return trainA_image, trainB_image, scale_factor
 
 
 
@@ -214,8 +194,6 @@ class MultiModalLoss(nn.Module):
         total_loss = (self.alpha * l1_loss + self.beta * perceptual_loss + self.gamma * ssim_loss)
         return total_loss
 
-
-
 # Training Loop
 def train_pfin(model, combined_dataloader, optimizer, num_epochs=10):
 
@@ -228,24 +206,14 @@ def train_pfin(model, combined_dataloader, optimizer, num_epochs=10):
             optimizer.zero_grad()
             
             # Super-Resolution Task
-            sr_input_patches, sr_target_patches, sr_scale_factor = sr_batch
-            
-            # Flatten patches to pass through the model
-            sr_input_patches = sr_input_patches.view(-1, sr_input_patches.shape[-3], sr_input_patches.shape[-2], sr_input_patches.shape[-1])
-            sr_target_patches = sr_target_patches.view(-1, sr_target_patches.shape[-3], sr_target_patches.shape[-2], sr_target_patches.shape[-1])
-
-            sr_output_patches = model(sr_input_patches, sr_scale_factor)
-            sr_loss = criterion(sr_output_patches, sr_target_patches, torch.zeros_like(sr_output_patches), torch.zeros_like(sr_target_patches))
+            sr_input, sr_target, sr_scale_factor = sr_batch
+            sr_output, _ = model(sr_input, sr_scale_factor)
+            sr_loss = criterion(sr_output, sr_target)
 
             # Enhancement Task
-            enh_input_patches, enh_target_patches, enh_scale_factor = enh_batch
-            
-            # Flatten patches to pass through the model
-            enh_input_patches = enh_input_patches.view(-1, enh_input_patches.shape[-3], enh_input_patches.shape[-2], enh_input_patches.shape[-1])
-            enh_target_patches = enh_target_patches.view(-1, enh_target_patches.shape[-3], enh_target_patches.shape[-2], enh_target_patches.shape[-1])
-
-            enh_output_patches = model(enh_input_patches, enh_scale_factor)
-            enh_loss = criterion(torch.zeros_like(enh_output_patches), torch.zeros_like(enh_target_patches), enh_output_patches, enh_target_patches)
+            enh_input, enh_target, enh_scale_factor = enh_batch
+            _, enh_output = model(enh_input, enh_scale_factor)
+            enh_loss = criterion(enh_output, enh_target)
             
             # Combined Loss
             loss = sr_loss + enh_loss
