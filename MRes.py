@@ -15,15 +15,9 @@ class MRes(nn.Module):
 
     def forward(self, x):
         residual = x
-        print("Shape of x:", x.shape)
         x = self.relu(self.conv1(x))
-        print("Shape of x(relu):", x.shape)
         b1 = self.convd3(x)
-        print("Shape of b1:", b1.shape)
         b2 = self.convd5(x)
-        print("Shape of b2:", b2.shape)
         x = b1 + b2
-        print("Shape of b1+b2:", x.shape)
         x = self.conv2(x)
-        print("Shape of conv(b1+b2):", x.shape)
         return x + residual

@@ -28,7 +28,7 @@ class CGM(nn.Module):
         self.conv6 = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
         self.conv7 = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
         self.conv8 = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
-        
+
         self.relu = nn.ReLU()
 
     def forward(self, x):
@@ -41,7 +41,7 @@ class CGM(nn.Module):
         self.outArray[0] = self.conv2(self.relu(self.conv1(x)))
 
         x = self.up3(self.outArray[0])
-        
+
         self.outArray[1] = self.conv4(self.relu(self.conv3(x)))
 
         x = self.up2(self.outArray[1])

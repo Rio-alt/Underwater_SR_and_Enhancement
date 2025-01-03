@@ -14,7 +14,7 @@ class PFDM(nn.Module):
         super(PFDM, self).__init__()
 
         # Initial layers
-        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2) 
+        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.avgpool = nn.AvgPool2d(kernel_size=2, stride=2)
         self.conv = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
         self.relu = nn.ReLU()
@@ -54,7 +54,7 @@ class PFDM(nn.Module):
         self.gsa6 = GSA(in_channels)
         self.gsa7 = GSA(in_channels)
 
-        
+
 
     def forward(self, x, cgmOut):
         b1 = self.maxpool(x)
@@ -75,7 +75,7 @@ class PFDM(nn.Module):
 
 
         f4_mres = self.mres1(f4)
-        f4_fim = self.fim1(f4_mres, cgmOut[0]) 
+        f4_fim = self.fim1(f4_mres, cgmOut[0])
 
 
 
@@ -111,5 +111,5 @@ class PFDM(nn.Module):
 
 
         output = f1_fim
-       
+
         return output

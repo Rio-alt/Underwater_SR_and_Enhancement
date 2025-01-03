@@ -3,6 +3,7 @@ from PIL import Image
 import torch
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms.functional as TF
+import torch.nn.functional as F
 import torch.nn as nn
 import torch.optim as optim
 from torchvision import models
@@ -78,15 +79,15 @@ class EUVPDataset(Dataset):
 
 
 
-    
+
 # Custom Dataloaders
 #usr2048_dataset = USR2048Dataset(root_dir='C:/Users/basse/Downloads/USR-248/train_val', scale_factor=[2, 3, 4, 8])
 #euvp_dataset = EUVPDataset(root_dir='C:/Users/basse/Downloads/EUVP/Paired')
-ufo120_dataset = UFO120Dataset(root_dir='C:/Users/basse/Downloads/UFO-120/train_val')
+ufo120_dataset = UFO120Dataset(root_dir='/content/drive/MyDrive/ImageDataset/UFO-120/train_val')
 
 # Custom Dataloaders for each scale factor in USR2048
 usr2048_dataloaders = {
-    scale: DataLoader(USR2048Dataset(root_dir='C:/Users/basse/Downloads/USR-248/train_val', scale_factor=scale), batch_size=32, shuffle=True)
+    scale: DataLoader(USR2048Dataset(root_dir='/content/drive/MyDrive/ImageDataset/USR-248/train_val', scale_factor=scale), batch_size=32, shuffle=True)
     for scale in [2, 3, 4, 8]
 }
 
@@ -95,7 +96,7 @@ ufo120_dataloader = DataLoader(ufo120_dataset, batch_size=32, shuffle=True)
 # Custom Dataloaders for each sub-directory in EUVP
 euvp_sub_dirs = ['underwater_scenes', 'underwater_imagenet', 'underwater_dark']
 euvp_dataloaders = [
-    DataLoader(EUVPDataset(root_dir='C:/Users/basse/Downloads/EUVP/Paired', sub_dir=sub_dir), batch_size=16, shuffle=True)
+    DataLoader(EUVPDataset(root_dir='/content/drive/MyDrive/ImageDataset/EUVP/Paired', sub_dir=sub_dir), batch_size=16, shuffle=True)
     for sub_dir in euvp_sub_dirs
 ]
 
@@ -202,29 +203,57 @@ def train_pfin(model, combined_dataloader, optimizer, num_epochs=10):
 
     for epoch in range(num_epochs):
         model.train()
-        for sr_batch, enh_batch in combined_dataloader:
+        running_loss = 0.0
+
+
+        # Manually count the total number of batches
+        total_batches = sum(1 for _ in combined_dataloader)
+        print(f"Total number of batches in epoch {epoch+1}: {total_batches}")
+
+        for batch_idx, (sr_batch, enh_batch) in enumerate(combined_dataloader):
             optimizer.zero_grad()
-            
+
             # Super-Resolution Task
             sr_input, sr_target, sr_scale_factor = sr_batch
+
+            # Extract a single scale factor
+            sr_scale_factor = sr_scale_factor.unique().item()
+
             sr_output, _ = model(sr_input, sr_scale_factor)
             sr_loss = criterion(sr_output, sr_target)
 
             # Enhancement Task
             enh_input, enh_target, enh_scale_factor = enh_batch
+
+            # Extract a single scale factor
+            enh_scale_factor = enh_scale_factor.unique().item()
+
             _, enh_output = model(enh_input, enh_scale_factor)
+            enh_output = F.interpolate(enh_output, size=(enh_input.shape[2], enh_input.shape[3]), mode='bilinear', align_corners=False)
             enh_loss = criterion(enh_output, enh_target)
-            
+
             # Combined Loss
             loss = sr_loss + enh_loss
             loss.backward()
             optimizer.step()
 
+            running_loss += loss.item()
+            print(f"Batch {batch_idx+1}/{total_batches} completed. Current loss: {loss.item()}")
 
-        lr_scheduler.step()
-        print(f"Epoch [{epoch+1}/{num_epochs}] completed.")
+        # Save checkpoint after each epoch
+        checkpoint_path = f"/content/drive/MyDrive/ImageDataset/Checkpoints/checkpoint_epoch_{epoch+1}.pt"
+        torch.save({
+            'epoch': epoch + 1,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'lr_scheduler_state_dict': lr_scheduler.state_dict(),
+            'loss': loss.item(),
+        }, checkpoint_path)
+
+        lr_scheduler.step(running_loss / len(combined_dataloader))
+        print(f"Epoch [{epoch+1}/{num_epochs}] completed. Avg Loss: {running_loss / total_batches}")
 
 
 model = PFIN(in_channels=3)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-8)
-train_pfin(model, combined_dataloader, optimizer, num_epochs=10)
+train_pfin(model, combined_dataloader, optimizer, num_epochs=400)
