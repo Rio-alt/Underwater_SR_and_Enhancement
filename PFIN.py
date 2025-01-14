@@ -6,12 +6,13 @@ from PFDM import PFDM
 from CGM import CGM
 from HUP0 import HUP0
 from HUP1 import HUP1
+from SeparableConv2d import SeparableConv2d
 
 class PFIN(nn.Module):
     def __init__(self, in_channels, base_channels=64):
         super(PFIN, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(base_channels, in_channels, kernel_size=3, padding=1)
+        self.conv1 = SeparableConv2d(in_channels, base_channels, kernel_size=3, padding=1)
+        self.conv2 = SeparableConv2d(base_channels, in_channels, kernel_size=3, padding=1)
         self.cgm_module = CGM(base_channels)
         self.pfdm_module = PFDM(base_channels)
 

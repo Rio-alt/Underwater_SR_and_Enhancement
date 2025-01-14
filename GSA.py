@@ -3,14 +3,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from SeparableConv2d import SeparableConv2d
+
 class GSA(nn.Module):
     def __init__(self, in_channels):
         super(GSA, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels*2, in_channels, kernel_size=1)
+        self.conv1 = SeparableConv2d(in_channels*2, in_channels, kernel_size=1)
         self.gn = nn.GroupNorm(8, in_channels)
-        self.conv2 = nn.Conv2d(in_channels, in_channels, kernel_size=1)
+        self.conv2 = SeparableConv2d(in_channels, in_channels, kernel_size=1)
         self.relu = nn.ReLU()
-        self.conv3 = nn.Conv2d(in_channels, in_channels, kernel_size=1)
+        self.conv3 = SeparableConv2d(in_channels, in_channels, kernel_size=1)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x1, x2):

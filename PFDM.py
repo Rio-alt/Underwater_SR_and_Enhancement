@@ -7,6 +7,7 @@ from Downsample import Downsample
 from GSA import GSA
 from FIM import FIM
 from MRes import MRes
+from SeparableConv2d import SeparableConv2d
 
 
 class PFDM(nn.Module):
@@ -16,7 +17,7 @@ class PFDM(nn.Module):
         # Initial layers
         self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.avgpool = nn.AvgPool2d(kernel_size=2, stride=2)
-        self.conv = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
+        self.conv = SeparableConv2d(in_channels, in_channels, kernel_size=3, padding=1)
         self.relu = nn.ReLU()
 
         # Downsampling layers

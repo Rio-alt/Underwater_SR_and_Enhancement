@@ -2,12 +2,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from SeparableConv2d import SeparableConv2d
+
 class FIM(nn.Module):
     def __init__(self, in_channels, k=8):
         super(FIM, self).__init__()
         self.k = k  # Kernel size
         # Kernel generator: Generates a k*k kernel for each pixel (B, k*k, H, W)
-        self.kernel_generator = nn.ReLU(nn.Conv2d(in_channels, k * k, kernel_size=3, padding=1, bias=False))
+        self.kernel_generator = nn.ReLU(SeparableConv2d(in_channels, k * k, kernel_size=3, padding=1, bias=False))
 
     def forward(self, Mres_features, feature_map):
         B, C, H, W = feature_map.shape  # Batch size, Channels, Height, Width

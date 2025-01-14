@@ -9,6 +9,7 @@ import torch.optim as optim
 from torchvision import models
 from pytorch_msssim import SSIM
 from itertools import cycle
+import torch.quantization
 
 from PFIN import PFIN
 
@@ -177,36 +178,75 @@ class VGGFeatureExtractor(nn.Module):
                 break
         return features
 
+class UIQMLoss(nn.Module):
+    def __init__(self, c1=0.5, c2=0.3, c3=0.2):
+        super(UIQMLoss, self).__init__()
+        self.c1 = c1
+        self.c2 = c2
+        self.c3 = c3
+
+    def forward(self, img):
+        # Compute UICM (Colorfulness)
+        r, g, b = img[:, 0, :, :], img[:, 1, :, :], img[:, 2, :, :]
+        rg_diff = torch.abs(r - g).mean()
+        gb_diff = torch.abs(g - b).mean()
+        uicm = rg_diff + gb_diff
+
+        # Compute UIConM (Contrast)
+        contrast = torch.std(img)
+
+        # Compute UISM (Sharpness)
+        gradient_x = torch.abs(img[:, :, :, :-1] - img[:, :, :, 1:])
+        gradient_y = torch.abs(img[:, :, :-1, :] - img[:, :, 1:, :])
+        sharpness = torch.mean(gradient_x) + torch.mean(gradient_y)
+
+        # Weighted combination
+        uiqm = self.c1 * uicm + self.c2 * contrast + self.c3 * sharpness
+        return -uiqm  # Negate to use as a loss (higher UIQM means better quality)
+    
 class MultiModalLoss(nn.Module):
-    def __init__(self, alpha=1.0, beta=0.25, gamma=0.05):
+    def __init__(self, alpha=1.0, beta=0.25, gamma=0.05, delta=0.1):
         super(MultiModalLoss, self).__init__()
         self.alpha = alpha
         self.beta = beta
         self.gamma = gamma
+        self.delta = delta  # Weight for UIQM loss
         self.l1_loss = nn.L1Loss()
         self.perceptual_loss = VGGFeatureExtractor(layers=('conv5_3',))
         self.ssim_loss = SSIM(data_range=1.0, size_average=True, channel=3)
+        self.uiqm_loss = UIQMLoss(c1=0.5, c2=0.3, c3=0.2)
 
     def forward(self, sr_pred, sr_target):
+        # Compute individual loss components
         l1_loss = self.l1_loss(sr_pred, sr_target)
         perceptual_loss = self.l1_loss(self.perceptual_loss(sr_pred)[0], self.perceptual_loss(sr_target)[0])
         ssim_loss = 1 - self.ssim_loss(sr_pred, sr_target)
+        uiqm_loss = self.uiqm_loss(sr_pred)  # UIQM loss
 
-        total_loss = (self.alpha * l1_loss + self.beta * perceptual_loss + self.gamma * ssim_loss)
+        # Combine losses with respective weights
+        total_loss = (self.alpha * l1_loss +
+                      self.beta * perceptual_loss +
+                      self.gamma * ssim_loss +
+                      self.delta * uiqm_loss)
         return total_loss
+
 
 # Training Loop
 def train_pfin(model, combined_dataloader, optimizer, num_epochs=10):
 
-    criterion = MultiModalLoss(alpha=1.0, beta=0.25, gamma=0.05)
+    criterion = MultiModalLoss(alpha=1.0, beta=0.25, gamma=0.05, delta=0.1)
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=200, gamma=0.5)
+
+    # Enable Quantization-Aware Training (QAT)
+    model.qconfig = torch.quantization.get_default_qconfig("fbgemm")
+    torch.quantization.prepare_qat(model, inplace=True)
 
     for epoch in range(num_epochs):
         model.train()
         running_loss = 0.0
 
 
-        # Manually count the total number of batches
+        # Count total batches for progress tracking
         total_batches = sum(1 for _ in combined_dataloader)
         print(f"Total number of batches in epoch {epoch+1}: {total_batches}")
 
@@ -253,7 +293,14 @@ def train_pfin(model, combined_dataloader, optimizer, num_epochs=10):
         lr_scheduler.step(running_loss / len(combined_dataloader))
         print(f"Epoch [{epoch+1}/{num_epochs}] completed. Avg Loss: {running_loss / total_batches}")
 
+    # Convert to quantized model for inference
+    model.eval()
+    quantized_model = torch.quantization.convert(model)
+    print("Quantized model ready for inference.")
+
+    return quantized_model
 
 model = PFIN(in_channels=3)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-8)
-train_pfin(model, combined_dataloader, optimizer, num_epochs=400)
+quantized_model = train_pfin(model, combined_dataloader, optimizer, num_epochs=400)
+torch.save(quantized_model.state_dict(), "/content/drive/MyDrive/ImageDataset/Checkpoints/quantized_model_final.pt")

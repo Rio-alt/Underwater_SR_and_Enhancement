@@ -2,16 +2,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from SeparableConv2d import SeparableConv2d
 
 class MRes(nn.Module):
     def __init__(self, in_channels):
 
         super(MRes, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
+        self.conv1 = SeparableConv2d(in_channels, in_channels, kernel_size=3, padding=1)
         self.relu = nn.ReLU()
-        self.conv2 = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
-        self.convd3 = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=3, dilation=3)
-        self.convd5 = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=5, dilation=5)
+        self.conv2 = SeparableConv2d(in_channels, in_channels, kernel_size=3, padding=1)
+        self.convd3 = SeparableConv2d(in_channels, in_channels, kernel_size=3, padding=3, dilation=3)
+        self.convd5 = SeparableConv2d(in_channels, in_channels, kernel_size=3, padding=5, dilation=5)
 
     def forward(self, x):
         residual = x

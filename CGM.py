@@ -4,6 +4,7 @@ import torch.nn.functional as F
 
 from Upsample import Upsample
 from Downsample import Downsample
+from SeparableConv2d import SeparableConv2d
 
 class CGM(nn.Module):
     def __init__(self, in_channels):
@@ -19,15 +20,15 @@ class CGM(nn.Module):
         self.up2 = Upsample(in_channels)
         self.up1 = Upsample(in_channels)
 
-        self.conv1 = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
-        self.conv4 = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
+        self.conv1 = SeparableConv2d(in_channels, in_channels, kernel_size=3, padding=1)
+        self.conv2 = SeparableConv2d(in_channels, in_channels, kernel_size=3, padding=1)
+        self.conv3 = SeparableConv2d(in_channels, in_channels, kernel_size=3, padding=1)
+        self.conv4 = SeparableConv2d(in_channels, in_channels, kernel_size=3, padding=1)
 
-        self.conv5 = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
-        self.conv6 = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
-        self.conv7 = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
-        self.conv8 = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
+        self.conv5 = SeparableConv2d(in_channels, in_channels, kernel_size=3, padding=1)
+        self.conv6 = SeparableConv2d(in_channels, in_channels, kernel_size=3, padding=1)
+        self.conv7 = SeparableConv2d(in_channels, in_channels, kernel_size=3, padding=1)
+        self.conv8 = SeparableConv2d(in_channels, in_channels, kernel_size=3, padding=1)
 
         self.relu = nn.ReLU()
 
